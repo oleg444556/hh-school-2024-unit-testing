@@ -9,12 +9,10 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -34,17 +32,14 @@ public class LibraryManagerTest {
   void setUp() {
     libraryManager.addBook("Book1", 10);
     libraryManager.addBook("Book2", 1);
-    String userId = "User1";
-    when(userService.isUserActive(userId)).thenReturn(true);
-    libraryManager.borrowBook("Book2", userId);
   }
 
   @ParameterizedTest
   @CsvSource({
       "Book1, 5, 15",
       "Book1, 0, 10",
-      "Book2, 1, 1",
-      "Book2, 0, 0"
+      "Book2, 1, 2",
+      "Book2, 0, 1"
   })
   void testAddExistingBookId(String bookId, int quantity, int expectedValue) {
     libraryManager.addBook(bookId, quantity);
@@ -60,14 +55,12 @@ public class LibraryManagerTest {
   void testAddNewBookId(String bookId, int quantity, int expectedValue) {
     libraryManager.addBook(bookId, quantity);
     int totalQuantity = libraryManager.getAvailableCopies(bookId);
-    assertEquals(totalQuantity, expectedValue);
+    assertEquals(expectedValue, totalQuantity);
   }
 
   @Test
   void testFailureWhenNotActiveUserTriesToBorrowBook() {
     when(userService.isUserActive("NotActiveUser")).thenReturn(false);
-    doNothing().when(notificationService)
-        .notifyUser("NotActiveUser", "Your account is not active.");
     boolean result = libraryManager.borrowBook("Book1", "NotActiveUser");
     int totalQuantity = libraryManager.getAvailableCopies("Book1");
 
@@ -75,7 +68,7 @@ public class LibraryManagerTest {
     verify(userService, times(1)).isUserActive("NotActiveUser");
     verify(notificationService, times(1))
         .notifyUser("NotActiveUser", "Your account is not active.");
-    assertEquals(totalQuantity, 10);
+    assertEquals(10, totalQuantity);
   }
 
   @Test
@@ -86,14 +79,12 @@ public class LibraryManagerTest {
 
     assertFalse(result);
     verify(userService, times(1)).isUserActive("ActiveUser");
-    assertEquals(totalQuantity, 0);
+    assertEquals(0, totalQuantity);
   }
 
   @Test
   void testSuccessAttemptToBorrowBook() {
     when(userService.isUserActive("ActiveUser")).thenReturn(true);
-    doNothing().when(notificationService)
-        .notifyUser("ActiveUser", "You have borrowed the book: Book1");
     boolean result = libraryManager.borrowBook("Book1", "ActiveUser");
     int totalRemainsOfBook = libraryManager.getAvailableCopies("Book1");
 
@@ -101,37 +92,38 @@ public class LibraryManagerTest {
     verify(userService, times(1)).isUserActive("ActiveUser");
     verify(notificationService, times(1))
         .notifyUser("ActiveUser", "You have borrowed the book: Book1");
-    assertEquals(totalRemainsOfBook, 9);
+    assertEquals(9, totalRemainsOfBook);
   }
 
   @Test
   void testFailureToReturnBookIfNoBookInBorrowed() {
-    int booksBefore = libraryManager.getAvailableCopies("Book0");
     boolean result = libraryManager.returnBook("Book0", "User1");
 
     assertFalse(result);
-    assertEquals(libraryManager.getAvailableCopies("Book0"), booksBefore);
+    assertEquals(0, libraryManager.getAvailableCopies("Book0"));
   }
 
   @Test
   void testFailureToReturnBookIfUserIdIncorrect() {
-    int booksBefore = libraryManager.getAvailableCopies("Book2");
+    String userId = "User1";
+    when(userService.isUserActive(userId)).thenReturn(true);
+    libraryManager.borrowBook("Book2", userId);
     boolean result = libraryManager.returnBook("Book2", "User100");
 
     assertFalse(result);
-    assertEquals(libraryManager.getAvailableCopies("Book2"), booksBefore);
+    assertEquals(0, libraryManager.getAvailableCopies("Book2"));
   }
 
   @Test
   void testSuccessAttemptToReturnBook() {
-    doNothing().when(notificationService)
-        .notifyUser("User1", "You have returned the book: Book2");
-    int booksBefore = libraryManager.getAvailableCopies("Book2");
+    String userId = "User1";
+    when(userService.isUserActive(userId)).thenReturn(true);
+    libraryManager.borrowBook("Book2", userId);
     boolean result = libraryManager.returnBook("Book2", "User1");
     int totalQuantity = libraryManager.getAvailableCopies("Book2");
 
     assertTrue(result);
-    assertEquals(booksBefore + 1, totalQuantity);
+    assertEquals(1, totalQuantity);
     verify(notificationService, times(1))
         .notifyUser("User1", "You have returned the book: Book2");
   }
@@ -155,8 +147,7 @@ public class LibraryManagerTest {
       })
   void testSuccessCalculationOfDynamicLateFee(int overdueDays, boolean isBestseller, boolean isPremiumMember,
                                               double expectedFee) {
-    assertDoesNotThrow(() -> libraryManager.calculateDynamicLateFee(overdueDays, isBestseller, isPremiumMember));
     double result = libraryManager.calculateDynamicLateFee(overdueDays, isBestseller, isPremiumMember);
-    assertEquals(result, expectedFee);
+    assertEquals(expectedFee, result);
   }
 }
